@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a16">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Polyplayer</title>
+    <style>
+        /* === DESIGN SYSTEM === */
+        :root {
+            --bg-base: #070711;
+            --bg-surface: rgba(30, 30, 48, 0.6);
+            --bg-panel: rgba(45, 45, 70, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --primary: #8a2be2;
+            --primary-glow: rgba(138, 43, 226, 0.5);
+            --secondary: #00d2ff;
+            --secondary-glow: rgba(0, 210, 255, 0.5);
+            --accent-success: #00ff88;
+            --accent-danger: #ff3366;
+            --accent-coin: #ffd700;
+            --text-main: #ffffff;
+            --text-muted: #8e8e9f;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
+            --safe-top: env(safe-area-inset-top, 0px);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: var(--font-family); background-color: var(--bg-base); color: var(--text-main);
+            overflow: hidden; height: 100dvh; width: 100vw; display: flex; flex-direction: column;
+            background-image:
+                radial-gradient(circle at 15% 50%, rgba(138, 43, 226, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(0, 210, 255, 0.15), transparent 25%);
+        }
+        h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.5px; }
+        input, button { font-family: inherit; }
+        .glass { background: var(--bg-surface); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: 20px; }
+        .glass-panel { background: var(--bg-panel); border-radius: 14px; border: 1px solid var(--glass-border); padding: 16px; }
+
+        /* === APP LAYOUT === */
+        #app-container { display: flex; flex-direction: column; height: 100%; width: 100%; position: relative; }
+        .view-container {
+            flex: 1; overflow-y: auto; padding: 20px;
+            padding-bottom: calc(70px + var(--safe-bottom));
+            display: none; opacity: 0; transform: translateY(10px);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .view-container.active { display: block; opacity: 1; transform: translateY(0); }
+        .view-container::-webkit-scrollbar { display: none; }
+
+        /* === HEADER === */
+        header {
+            padding: calc(15px + var(--safe-top)) 20px 15px;
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(7, 7, 17, 0.8); backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border); z-index: 100; flex-shrink: 0;
+        }
+        .logo-text { font-size: 1.2rem; font-weight: 900; background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; color: transparent; letter-spacing: 1px; cursor: pointer; }
+        .header-controls { display: flex; align-items: center; gap: 12px; }
+        .admin-header-btn { background: rgba(255,51,102,0.2); border: 1px solid var(--accent-danger); color: var(--accent-danger); padding: 6px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: bold; cursor: pointer; display: none; }
+        .coin-btn { background: rgba(0,0,0,0.5); border: 1px solid var(--glass-border); padding: 6px 14px; border-radius: 20px; font-weight: 800; color: var(--accent-coin); display: flex; align-items: center; gap: 6px; cursor: pointer; transition: 0.2s; }
+        .coin-btn:active { transform: scale(0.95); }
+
+        /* === BOTTOM NAV === */
+        #bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            padding: 8px 0 calc(8px + var(--safe-bottom));
+            background: rgba(7,7,17,0.95); backdrop-filter: blur(20px);
+            border-top: 1px solid var(--glass-border);
+            display: flex; z-index: 200;
+        }
+        .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; background: none; border: none; color: var(--text-muted); font-size: 0.65rem; font-weight: 600; cursor: pointer; transition: color 0.2s; }
+        .nav-btn .nav-icon { font-size: 1.4rem; }
+        .nav-btn.active { color: var(--secondary); }
+        .nav-btn.admin-nav { color: var(--accent-danger); display: none; }
+
+        /* === AUTH OVERLAY === */
+        #auth-overlay {
+            position: fixed; inset: 0; background: var(--bg-base); z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px;
+            background-image: radial-gradient(circle at top, rgba(138,43,226,0.2), transparent 50%), radial-gradient(circle at bottom, rgba(0,210,255,0.2), transparent 50%);
+            transition: opacity 0.5s ease;
+        }
+        .auth-brand { font-size: 2.5rem; font-weight: 900; margin-bottom: 40px; text-align: center; background: linear-gradient(135deg, var(--text-main), var(--secondary)); -webkit-background-clip: text; color: transparent; }
+        .auth-box { width: 100%; max-width: 400px; padding: 30px 20px; }
+        .auth-tabs { display: flex; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 5px; margin-bottom: 25px; }
+        .auth-tab { flex: 1; padding: 10px; text-align: center; border-radius: 8px; font-weight: 600; color: var(--text-muted); cursor: pointer; transition: 0.3s; }
+        .auth-tab.active { background: var(--bg-panel); color: var(--text-main); }
+        .input-group { margin-bottom: 18px; }
+        .input-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+        .input-group input { width: 100%; padding: 14px 16px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 10px; color: white; font-size: 1rem; outline: none; transition: 0.3s; user-select: text; -webkit-user-select: text; }
+        .input-group input:focus { border-color: var(--secondary); box-shadow: 0 0 10px var(--secondary-glow); }
+        .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 700; color: white; cursor: pointer; transition: transform 0.1s, box-shadow 0.3s; }
+        .btn:active { transform: scale(0.96); }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--secondary)); box-shadow: 0 8px 20px var(--primary-glow); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .auth-error { color: var(--accent-danger); font-size: 0.85rem; text-align: center; margin-bottom: 12px; min-height: 20px; }
+
+        /* === TOAST === */
+        #toast {
+            position: fixed; bottom: calc(80px + var(--safe-bottom)); left: 50%; transform: translateX(-50%) translateY(20px);
+            background: rgba(30,30,50,0.95); border: 1px solid var(--glass-border); border-radius: 12px;
+            padding: 12px 20px; font-size: 0.9rem; font-weight: 600; z-index: 9998;
+            opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        #toast.success { border-color: var(--accent-success); color: var(--accent-success); }
+        #toast.error   { border-color: var(--accent-danger);  color: var(--accent-danger); }
+        #toast.info    { border-color: var(--secondary);      color: var(--secondary); }
+
+        /* === LOADING SPINNER === */
+        .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* === GAMES VIEW === */
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-icon { font-size: 4rem; opacity: 0.4; margin-bottom: 15px; }
+        .game-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .game-card { position: relative; overflow: hidden; padding: 0; border: 1px solid var(--glass-border); border-radius: 20px; cursor: pointer; background: var(--bg-surface); }
+        .game-art { height: 160px; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><defs><pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,210,255,0.2)" stroke-width="1"/></pattern></defs><rect width="100%25" height="100%25" fill="%230f172a"/><rect width="100%25" height="100%25" fill="url(%23g)"/></svg>') center/cover; position: relative; display: flex; align-items: flex-end; padding: 15px; }
+        .game-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); }
+        .game-title-card { position: relative; z-index: 2; font-size: 1.8rem; font-weight: 900; color: white; }
+        .game-details { padding: 15px; background: rgba(20,20,30,0.9); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .stat-pill { background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; color: var(--secondary); }
+        .stat-pill.coin { color: var(--accent-coin); }
+        .game-btn { background: var(--secondary); color: #000; border: none; padding: 8px 20px; border-radius: 8px; font-weight: 800; font-size: 0.9rem; cursor: pointer; }
+        .game-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
+
+        /* === LOBBY MODAL === */
+        #lobby-modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 5000;
+            display: none; align-items: flex-end; justify-content: center;
+        }
+        #lobby-modal.open { display: flex; }
+        .lobby-sheet {
+            width: 100%; max-width: 500px; background: #0f0f1e; border-radius: 24px 24px 0 0;
+            border: 1px solid var(--glass-border); padding: 24px 20px;
+            padding-bottom: calc(24px + var(--safe-bottom));
+            max-height: 90vh; overflow-y: auto;
+        }
+        .lobby-handle { width: 40px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 4px; margin: 0 auto 20px; }
+        .lobby-game-name { font-size: 1.5rem; font-weight: 900; margin-bottom: 6px; }
+        .lobby-status { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; }
+        .lobby-info-row { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .lobby-info-pill { flex: 1; min-width: 80px; text-align: center; padding: 12px 8px; background: var(--bg-panel); border-radius: 12px; border: 1px solid var(--glass-border); }
+        .lobby-info-pill .val { font-size: 1.4rem; font-weight: 900; color: var(--accent-coin); }
+        .lobby-info-pill .lbl { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+        .player-slots { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .player-slot { flex: 1; min-width: 80px; padding: 12px 8px; border-radius: 12px; background: rgba(0,0,0,0.3); border: 2px dashed rgba(255,255,255,0.1); text-align: center; font-size: 1.5rem; }
+        .player-slot.filled { border-color: var(--secondary); background: rgba(0,210,255,0.1); }
+        .player-slot .slot-name { font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lobby-confirm-btn { width: 100%; padding: 16px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; border-radius: 14px; font-size: 1.1rem; font-weight: 800; color: white; cursor: pointer; margin-bottom: 10px; }
+        .lobby-cancel-btn { width: 100%; padding: 14px; background: rgba(255,51,102,0.15); border: 1px solid var(--accent-danger); border-radius: 14px; font-size: 1rem; font-weight: 700; color: var(--accent-danger); cursor: pointer; }
+
+        /* === CHAT BOX (inside lobby) === */
+        .chat-box { margin-top: 16px; border: 1px solid var(--glass-border); border-radius: 14px; overflow: hidden; }
+        .chat-messages { height: 150px; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(0,0,0,0.3); }
+        .chat-messages::-webkit-scrollbar { display: none; }
+        .chat-msg { font-size: 0.8rem; line-height: 1.3; }
+        .chat-msg .msg-user { font-weight: 700; color: var(--secondary); }
+        .chat-msg .msg-text { color: var(--text-main); }
+        .chat-msg.system-msg { color: var(--text-muted); font-style: italic; text-align: center; }
+        .chat-input-row { display: flex; gap: 8px; padding: 8px; background: rgba(0,0,0,0.2); }
+        .chat-input-row input { flex: 1; padding: 10px 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 8px; color: white; font-size: 0.85rem; outline: none; user-select: text; -webkit-user-select: text; }
+        .chat-send-btn { padding: 10px 14px; background: var(--secondary); border: none; border-radius: 8px; color: #000; font-weight: 800; cursor: pointer; font-size: 0.8rem; }
+        .quick-msgs { display: flex; gap: 6px; padding: 6px 8px; overflow-x: auto; background: rgba(0,0,0,0.1); }
+        .quick-msgs::-webkit-scrollbar { display: none; }
+        .quick-msg-btn { padding: 5px 10px; background: rgba(0,210,255,0.1); border: 1px solid rgba(0,210,255,0.3); border-radius: 20px; color: var(--secondary); font-size: 0.75rem; white-space: nowrap; cursor: pointer; }
+
+        /* === WALLET VIEW === */
+        .profile-header { text-align: center; margin-bottom: 20px; }
+        .avatar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 15px 0 25px; }
+        .avatar-item { font-size: 2rem; text-align: center; padding: 10px 0; background: var(--bg-panel); border-radius: 12px; border: 2px solid transparent; cursor: pointer; transition: 0.2s; filter: grayscale(50%); }
+        .avatar-item.selected { border-color: var(--secondary); background: rgba(0,210,255,0.1); filter: grayscale(0%); transform: scale(1.05); box-shadow: 0 0 15px var(--secondary-glow); }
+        .balance-card { text-align: center; padding: 30px 20px; background: linear-gradient(180deg, rgba(30,30,50,0.8), rgba(20,20,30,0.8)); margin-bottom: 25px; }
+        .balance-label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5px; }
+        .balance-amount { font-size: 3.5rem; font-weight: 900; color: var(--accent-coin); }
+        .tx-list { display: flex; flex-direction: column; gap: 10px; }
+        .tx-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: rgba(0,0,0,0.2); border-radius: 10px; }
+        .tx-title { font-weight: 600; font-size: 0.9rem; }
+        .tx-date { font-size: 0.75rem; color: var(--text-muted); }
+        .tx-amount.pos { font-weight: 800; color: var(--accent-success); }
+        .tx-amount.neg { font-weight: 800; color: var(--accent-danger); }
+
+        /* === PROFILE VIEW === */
+        .section-title { font-size: 1rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .profile-save-btn { margin-top: 16px; padding: 14px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; color: white; cursor: pointer; width: 100%; }
+        .logout-btn { margin-top: 12px; padding: 14px; background: rgba(255,51,102,0.15); border: 1px solid var(--accent-danger); border-radius: 12px; font-size: 1rem; font-weight: 700; color: var(--accent-danger); cursor: pointer; width: 100%; }
+        .display-name-input { width: 100%; padding: 14px 16px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 10px; color: white; font-size: 1rem; outline: none; transition: 0.3s; user-select: text; -webkit-user-select: text; margin-bottom: 0; }
+        .display-name-input:focus { border-color: var(--secondary); }
+
+        /* === ADMIN VIEW === */
+        .admin-tabs { display: flex; background: rgba(0,0,0,0.4); padding: 4px; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--glass-border); }
+        .admin-tab-btn { flex: 1; padding: 10px; background: none; border: none; color: var(--text-muted); font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .admin-tab-btn.active { background: var(--accent-danger); color: white; }
+        .sub-panel { display: none; }
+        .sub-panel.active { display: block; }
+        .search-container { display: flex; gap: 10px; margin-bottom: 15px; }
+        .search-container input { flex: 1; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 8px; color: white; outline: none; user-select: text; -webkit-user-select: text; font-size: 0.9rem; }
+        .table-wrapper { overflow-x: auto; border-radius: 10px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
+        th, td { padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); white-space: nowrap; }
+        th { background: rgba(0,0,0,0.4); color: var(--text-muted); }
+        .btn-sm { padding: 6px 12px; border-radius: 6px; border: none; font-size: 0.75rem; font-weight: bold; cursor: pointer; background: rgba(0,255,136,0.15); color: var(--accent-success); border: 1px solid var(--accent-success); }
+        .btn-sm.danger { background: rgba(255,51,102,0.15); color: var(--accent-danger); border-color: var(--accent-danger); }
+        .stake-input { width: 60px; padding: 6px; background: rgba(0,0,0,0.5); border: 1px solid var(--glass-border); color: white; text-align: center; border-radius: 6px; font-size: 0.85rem; }
+        .admin-form-panel { background: var(--bg-panel); border-radius: 14px; border: 1px solid var(--glass-border); padding: 16px; margin-bottom: 20px; }
+        .admin-form-panel h4 { margin-bottom: 12px; color: var(--secondary); }
+        .admin-form-panel input, .admin-form-panel select { width: 100%; padding: 10px 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 8px; color: white; font-size: 0.9rem; outline: none; margin-bottom: 10px; user-select: text; -webkit-user-select: text; }
+        .admin-form-panel select option { background: #1a1a2e; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; }
+        .badge.active { background: rgba(0,255,136,0.15); color: var(--accent-success); border: 1px solid var(--accent-success); }
+        .badge.inactive { background: rgba(255,51,102,0.15); color: var(--accent-danger); border: 1px solid var(--accent-danger); }
+
+        /* === INVITE / FRIEND SYSTEM === */
+        .invite-box { margin-top: 16px; background: rgba(0,0,0,0.3); border-radius: 14px; border: 1px solid var(--glass-border); padding: 14px; }
+        .invite-box h4 { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .invite-code-display { font-size: 1.8rem; font-weight: 900; letter-spacing: 6px; color: var(--secondary); text-align: center; padding: 10px; background: rgba(0,210,255,0.08); border-radius: 10px; cursor: pointer; border: 1px dashed rgba(0,210,255,0.3); margin-bottom: 10px; }
+        .invite-code-display:active { opacity: 0.7; }
+        .invite-search-row { display: flex; gap: 8px; margin-bottom: 8px; }
+        .invite-search-row input { flex: 1; padding: 10px 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 8px; color: white; font-size: 0.85rem; outline: none; user-select: text; -webkit-user-select: text; }
+        .invite-search-row button { padding: 10px 14px; background: var(--primary); border: none; border-radius: 8px; color: white; font-weight: 700; font-size: 0.8rem; cursor: pointer; white-space: nowrap; }
+        .invite-results { display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; }
+        .invite-user-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: rgba(255,255,255,0.05); border-radius: 8px; }
+        .invite-user-info { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+        .invite-user-btn { padding: 5px 12px; background: rgba(0,210,255,0.15); border: 1px solid var(--secondary); border-radius: 6px; color: var(--secondary); font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+
+        /* === JOIN BY CODE MODAL === */
+        #join-code-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 6000; display: none; align-items: center; justify-content: center; padding: 20px; }
+        #join-code-modal.open { display: flex; }
+        .join-code-sheet { background: #0f0f1e; border-radius: 20px; border: 1px solid var(--glass-border); padding: 28px 22px; width: 100%; max-width: 380px; }
+        .join-code-sheet h3 { margin-bottom: 6px; font-size: 1.2rem; }
+        .join-code-sheet p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px; }
+        .join-code-input { width: 100%; padding: 16px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border); border-radius: 12px; color: white; font-size: 1.4rem; font-weight: 900; letter-spacing: 6px; text-align: center; outline: none; text-transform: uppercase; margin-bottom: 14px; user-select: text; -webkit-user-select: text; }
+        .join-code-input:focus { border-color: var(--secondary); }
+        .join-code-btn { width: 100%; padding: 15px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border: none; border-radius: 12px; font-size: 1rem; font-weight: 800; color: white; cursor: pointer; margin-bottom: 10px; }
+        .join-code-cancel { width: 100%; padding: 13px; background: rgba(255,51,102,0.1); border: 1px solid var(--accent-danger); border-radius: 12px; font-size: 0.95rem; font-weight: 700; color: var(--accent-danger); cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<!-- ===== TOAST ===== -->
+<div id="toast"></div>
+
+<!-- ===== AUTH OVERLAY ===== -->
+<div id="auth-overlay">
+    <div class="auth-brand">POLYPLAYER</div>
+    <div class="glass auth-box">
+        <div class="auth-tabs">
+            <div class="auth-tab active" onclick="toggleAuthMode('login')" id="tab-login">Login</div>
+            <div class="auth-tab" onclick="toggleAuthMode('signup')" id="tab-signup">Sign Up</div>
+        </div>
+        <div class="auth-error" id="auth-error"></div>
+        <div class="input-group">
+            <label>Username</label>
+            <input type="text" id="auth-username" placeholder="Enter username" autocomplete="username">
+        </div>
+        <div class="input-group" id="signup-display-group" style="display:none;">
+            <label>Display Name</label>
+            <input type="text" id="auth-display" placeholder="How others see you">
+        </div>
+        <div class="input-group">
+            <label>Password</label>
+            <input type="password" id="auth-password" placeholder="Enter password" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary" id="auth-submit-btn" onclick="handleAuth()">ACCESS HUB</button>
+    </div>
+</div>
+
+<!-- ===== LOBBY MODAL ===== -->
+<div id="lobby-modal">
+    <div class="lobby-sheet">
+        <div class="lobby-handle"></div>
+        <div class="lobby-game-name" id="lobby-game-name">Tac-Grid</div>
+        <div class="lobby-status" id="lobby-status">Waiting for players...</div>
+
+        <div class="lobby-info-row">
+            <div class="lobby-info-pill">
+                <div class="val" id="lobby-stake-display">3</div>
+                <div class="lbl">Stake 🪙</div>
+            </div>
+            <div class="lobby-info-pill">
+                <div class="val" id="lobby-pot-display">0</div>
+                <div class="lbl">Pot 🪙</div>
+            </div>
+            <div class="lobby-info-pill">
+                <div class="val" id="lobby-players-display">0/2</div>
+                <div class="lbl">Players</div>
+            </div>
+        </div>
+
+        <div class="player-slots" id="lobby-player-slots"></div>
+
+        <button class="lobby-confirm-btn" id="lobby-join-btn" onclick="joinLobby()">PAY & JOIN — <span id="lobby-join-cost">3</span> 🪙</button>
+        <button class="lobby-cancel-btn" id="lobby-leave-btn" style="display:none;" onclick="leaveLobby()">LEAVE & REFUND</button>
+        <button class="lobby-cancel-btn" onclick="closeLobbyModal()" style="margin-top:8px;">CLOSE</button>
+
+        <!-- Invite a friend -->
+        <div class="invite-box" id="lobby-invite-box" style="display:none;">
+            <h4>📨 Invite a Friend</h4>
+            <div class="invite-code-display" id="lobby-invite-code" onclick="copyInviteCode()">------</div>
+            <p style="font-size:0.75rem;color:var(--text-muted);text-align:center;margin-bottom:10px;">Tap code to copy · Share with your friend</p>
+            <div class="invite-search-row">
+                <input type="text" id="invite-search-input" placeholder="Search username..." oninput="searchUsersForInvite()">
+            </div>
+            <div class="invite-results" id="invite-results"></div>
+        </div>
+
+        <!-- In-lobby chat -->
+        <div class="chat-box" id="lobby-chat-box" style="display:none;">
+            <div class="quick-msgs">
+                <button class="quick-msg-btn" onclick="sendQuickMsg(0)">Good luck! 🤞</button>
+                <button class="quick-msg-btn" onclick="sendQuickMsg(1)">GG 🎉</button>
+                <button class="quick-msg-btn" onclick="sendQuickMsg(2)">Nice move! 👏</button>
+                <button class="quick-msg-btn" onclick="sendQuickMsg(3)">Nooo! 😱</button>
+                <button class="quick-msg-btn" onclick="sendQuickMsg(4)">Let's go! 🔥</button>
+            </div>
+            <div class="chat-messages" id="lobby-chat-messages"></div>
+            <div class="chat-input-row">
+                <input type="text" id="lobby-chat-input" placeholder="Say something..." maxlength="200">
+                <button class="chat-send-btn" onclick="sendChatMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app-container" style="display:none;">
+
+    <header>
+        <div class="logo-text" onclick="switchView('games')">POLYPLAYER</div>
+        <div class="header-controls">
+            <button class="admin-header-btn" id="admin-header-btn" onclick="switchView('admin')">ADMIN</button>
+            <button onclick="openJoinCodeModal()" style="background:rgba(138,43,226,0.2);border:1px solid var(--primary);color:var(--primary);padding:6px 12px;border-radius:20px;font-size:0.8rem;font-weight:700;cursor:pointer;">🔗 Join</button>
+            <div class="coin-btn" id="header-coin-display" onclick="switchView('wallet')">10 🪙</div>
+        </div>
+    </header>
+
+    <!-- GAMES VIEW -->
+    <div class="view-container active" id="view-games">
+        <div id="game-search-bar" style="margin-bottom:16px;display:none;">
+            <input type="text" id="game-search-input" placeholder="🔍 Search games..." oninput="filterGames()"
+                style="width:100%;padding:12px 16px;background:rgba(0,0,0,0.4);border:1px solid var(--glass-border);border-radius:12px;color:white;font-size:0.95rem;outline:none;user-select:text;-webkit-user-select:text;">
+        </div>
+        <div id="games-empty-state" class="empty-state">
+            <div class="empty-icon">🪐</div>
+            <h2>No Games Yet</h2>
+            <p>Admin hasn't activated any games yet.</p>
+        </div>
+        <div class="game-grid" id="games-grid" style="display:none;"></div>
+    </div>
+
+    <!-- WALLET VIEW -->
+    <div class="view-container" id="view-wallet">
+        <div class="profile-header">
+            <div style="font-size:3.5rem;margin-bottom:5px;" id="wallet-avatar">🐺</div>
+            <h2 id="wallet-username">Player</h2>
+        </div>
+        <div class="glass balance-card">
+            <div class="balance-label">Coin Balance</div>
+            <div class="balance-amount" id="wallet-balance-val">10 🪙</div>
+        </div>
+        <h3 style="margin-bottom:12px;font-size:1rem;">Recent Transactions</h3>
+        <div class="glass-panel tx-list" id="tx-list">
+            <div class="tx-item"><span style="color:var(--text-muted);font-size:0.85rem;">Loading...</span></div>
+        </div>
+    </div>
+
+    <!-- PROFILE VIEW -->
+    <div class="view-container" id="view-profile">
+        <h2 style="margin-bottom:20px;">My Profile</h2>
+        <div class="glass-panel" style="margin-bottom:20px;">
+            <div class="section-title">Display Name</div>
+            <input type="text" class="display-name-input" id="profile-display-input" placeholder="Your display name" maxlength="30">
+        </div>
+        <div class="glass-panel">
+            <div class="section-title" style="margin-bottom:12px;">Choose Avatar</div>
+            <div class="avatar-grid" id="profile-avatar-grid">
+                <div class="avatar-item" onclick="selectAvatar(this,'🦊')">🦊</div>
+                <div class="avatar-item selected" onclick="selectAvatar(this,'🐺')">🐺</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'🐍')">🐍</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'🤖')">🤖</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'👻')">👻</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'🦅')">🦅</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'👾')">👾</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'⚡')">⚡</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'🐻')">🐻</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'🦁')">🦁</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'🐯')">🐯</div>
+                <div class="avatar-item" onclick="selectAvatar(this,'🦂')">🦂</div>
+            </div>
+        </div>
+        <button class="profile-save-btn" onclick="saveProfile()">SAVE PROFILE</button>
+        <button class="logout-btn" onclick="logout()">LOG OUT</button>
+    </div>
+
+    <!-- ADMIN VIEW -->
+    <div class="view-container" id="view-admin">
+        <h2 style="color:var(--accent-danger);margin-bottom:20px;">Admin Control</h2>
+        <div class="admin-tabs">
+            <button class="admin-tab-btn active" onclick="switchAdminTab('users',this)">👥 Players</button>
+            <button class="admin-tab-btn" onclick="switchAdminTab('games',this)">🎮 Games</button>
+            <button class="admin-tab-btn" onclick="switchAdminTab('matches',this)">🏆 Matches</button>
+        </div>
+
+        <!-- USERS SUBPANEL -->
+        <div class="sub-panel active" id="subpanel-users">
+            <div class="search-container">
+                <input type="text" id="adminUserSearch" placeholder="Search players..." oninput="filterAdminUsers()">
+            </div>
+            <div class="table-wrapper">
+                <table id="adminUserTable">
+                    <thead><tr><th>Username</th><th>Display</th><th>Coins</th><th>Last Login</th><th>Action</th></tr></thead>
+                    <tbody id="admin-users-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- GAMES SUBPANEL -->
+        <div class="sub-panel" id="subpanel-games">
+            <div class="admin-form-panel">
+                <h4>Register New Game</h4>
+                <input type="text" id="newGameId" placeholder="Game ID (e.g. tac-grid)">
+                <input type="text" id="newGameTitle" placeholder="Game Name (e.g. Tac-Grid)">
+                <input type="number" id="newGameCost" placeholder="Stake coins" min="1">
+                <input type="number" id="newGameMin" placeholder="Min players" min="2" value="2">
+                <input type="number" id="newGameMax" placeholder="Max players" min="2" value="2">
+                <button class="btn btn-primary" style="padding:12px;font-size:0.95rem;" onclick="adminRegisterGame()">REGISTER GAME</button>
+            </div>
+            <div class="table-wrapper">
+                <table id="adminGamesTable">
+                    <thead><tr><th>Game</th><th>Stake</th><th>Players</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="admin-games-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- MATCHES SUBPANEL -->
+        <div class="sub-panel" id="subpanel-matches">
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th>Game</th><th>Pot</th><th>Winner</th><th>Status</th><th>Date</th></tr></thead>
+                    <tbody id="admin-matches-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- JOIN BY CODE MODAL -->
+<div id="join-code-modal">
+    <div class="join-code-sheet">
+        <h3>🔗 Join Friend's Game</h3>
+        <p>Enter the 6-character invite code your friend shared with you.</p>
+        <input type="text" class="join-code-input" id="join-code-input" placeholder="A3F9C2" maxlength="6">
+        <div class="auth-error" id="join-code-error" style="margin-bottom:12px;"></div>
+        <button class="join-code-btn" onclick="joinByCode()">JOIN GAME</button>
+        <button class="join-code-cancel" onclick="closeJoinCodeModal()">CANCEL</button>
+    </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav id="bottom-nav" style="display:none;">
+    <button class="nav-btn active" onclick="switchView('games')" id="nav-games">
+        <span class="nav-icon">🎮</span>Games
+    </button>
+    <button class="nav-btn" onclick="switchView('wallet')" id="nav-wallet">
+        <span class="nav-icon">💰</span>Wallet
+    </button>
+    <button class="nav-btn" onclick="switchView('profile')" id="nav-profile">
+        <span class="nav-icon">👤</span>Profile
+    </button>
+    <button class="nav-btn admin-nav" onclick="switchView('admin')" id="nav-admin">
+        <span class="nav-icon">⚙️</span>Admin
+    </button>
+</nav>
+
+<script>
+// =====================================================
+//  CONFIG — update API_BASE to your Railway server URL
+//  Example: const API_BASE = 'https://polyplayer.railway.app'
+//  For local testing leave it as empty string ''
+// =====================================================
+const API_BASE = '';
+
+// =====================================================
+//  APP STATE
+// =====================================================
+let currentUser   = null;   // { username, display_name, coins, avatar, is_admin }
+let sessionToken  = localStorage.getItem('pp_token') || null;
+let authMode      = 'login';
+let selectedAvatar= '🐺';
+
+// Lobby state
+let activeLobbyId   = null;
+let pendingGame     = null;  // game object user tapped
+let lobbyWs         = null;
+let hasJoinedLobby  = false;
+
+// =====================================================
+//  API HELPER
+// =====================================================
+async function api(method, path, body) {
+    const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+    };
+    if (sessionToken) opts.headers['Authorization'] = `Bearer ${sessionToken}`;
+    if (body)         opts.body = JSON.stringify(body);
+    try {
+        const res  = await fetch(API_BASE + path, opts);
+        const data = await res.json();
+        return data;
+    } catch (e) {
+        return { ok: false, error: 'Network error. Check your connection.' };
+    }
+}
+
+// =====================================================
+//  TOAST
+// =====================================================
+let toastTimer;
+function showToast(msg, type = 'info') {
+    const t = document.getElementById('toast');
+    t.textContent  = msg;
+    t.className    = `show ${type}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.className = '', 2800);
+}
+
+// =====================================================
+//  AUTH
+// =====================================================
+function toggleAuthMode(mode) {
+    authMode = mode;
+    document.getElementById('tab-login').classList.toggle('active',  mode === 'login');
+    document.getElementById('tab-signup').classList.toggle('active', mode === 'signup');
+    document.getElementById('signup-display-group').style.display = mode === 'signup' ? 'block' : 'none';
+    document.getElementById('auth-error').textContent = '';
+    document.getElementById('auth-submit-btn').textContent = mode === 'login' ? 'ACCESS HUB' : 'CREATE ACCOUNT';
+}
+
+async function handleAuth() {
+    const username = document.getElementById('auth-username').value.trim();
+    const password = document.getElementById('auth-password').value.trim();
+    const display  = document.getElementById('auth-display').value.trim();
+    const errEl    = document.getElementById('auth-error');
+    const btn      = document.getElementById('auth-submit-btn');
+
+    errEl.textContent = '';
+    if (!username || !password) { errEl.textContent = 'Please fill in all fields.'; return; }
+
+    btn.disabled   = true;
+    btn.innerHTML  = '<span class="spinner"></span>';
+
+    const endpoint = authMode === 'login' ? '/api/login' : '/api/register';
+    const body     = authMode === 'login'
+        ? { username, password }
+        : { username, password, display_name: display || username };
+
+    const data = await api('POST', endpoint, body);
+
+    btn.disabled  = false;
+    btn.textContent = authMode === 'login' ? 'ACCESS HUB' : 'CREATE ACCOUNT';
+
+    if (!data.ok) { errEl.textContent = data.error || 'Something went wrong.'; return; }
+
+    sessionToken = data.token;
+    localStorage.setItem('pp_token', sessionToken);
+    onLoginSuccess(data);
+}
+
+function onLoginSuccess(data) {
+    currentUser = {
+        username:     data.username,
+        display_name: data.display_name,
+        coins:        data.coins,
+        avatar:       data.avatar || '🐺',
+        is_admin:     data.is_admin,
+    };
+    selectedAvatar = currentUser.avatar;
+
+    // Show app
+    document.getElementById('auth-overlay').style.opacity = '0';
+    setTimeout(() => { document.getElementById('auth-overlay').style.display = 'none'; }, 500);
+    document.getElementById('app-container').style.display = 'flex';
+    document.getElementById('bottom-nav').style.display    = 'flex';
+
+    // Admin controls
+    if (currentUser.is_admin) {
+        document.getElementById('admin-header-btn').style.display = 'block';
+        document.getElementById('nav-admin').style.display        = 'flex';
+    }
+
+    updateHeaderCoins();
+    switchView('games');
+    loadGames();
+}
+
+async function logout() {
+    await api('POST', '/api/logout');
+    localStorage.removeItem('pp_token');
+    sessionToken  = null;
+    currentUser   = null;
+    location.reload();
+}
+
+// Auto-login on page load
+window.addEventListener('load', async () => {
+    if (!sessionToken) return;
+    const data = await api('GET', '/api/me');
+    if (data.ok) {
+        onLoginSuccess(data);
+    } else {
+        localStorage.removeItem('pp_token');
+        sessionToken = null;
+    }
+});
+
+// Enter key on auth inputs
+document.getElementById('auth-password').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuth(); });
+document.getElementById('auth-username').addEventListener('keydown', e => { if (e.key === 'Enter') handleAuth(); });
+
+// =====================================================
+//  VIEW SWITCHING + BACK BUTTON SUPPORT
+// =====================================================
+let currentView = 'games';
+
+function switchView(viewId, pushState = true) {
+    document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`view-${viewId}`).classList.add('active');
+    const navBtn = document.getElementById(`nav-${viewId}`);
+    if (navBtn) navBtn.classList.add('active');
+
+    // Push state so browser back button works within the app
+    if (pushState && currentView !== viewId) {
+        history.pushState({ view: viewId }, '', '#' + viewId);
+    }
+    currentView = viewId;
+
+    // Lazy load data on tab switch
+    if (viewId === 'wallet')  loadWallet();
+    if (viewId === 'profile') loadProfile();
+    if (viewId === 'admin' && currentUser?.is_admin) loadAdminUsers();
+}
+
+// Intercept browser back/forward — never leave the app
+window.addEventListener('popstate', e => {
+    // If lobby modal is open, close it first
+    if (document.getElementById('lobby-modal').classList.contains('open')) {
+        closeLobbyModal();
+        history.pushState({ view: currentView }, '', '#' + currentView);
+        return;
+    }
+    const view = e.state?.view || 'games';
+    switchView(view, false);
+});
+
+function switchAdminTab(panelId, btn) {
+    document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`subpanel-${panelId}`).classList.add('active');
+    if (panelId === 'users')   loadAdminUsers();
+    if (panelId === 'games')   loadAdminGames();
+    if (panelId === 'matches') loadAdminMatches();
+}
+
+// =====================================================
+//  HEADER COINS
+// =====================================================
+function updateHeaderCoins() {
+    if (!currentUser) return;
+    const coins = currentUser.is_admin ? '∞' : currentUser.coins;
+    document.getElementById('header-coin-display').textContent = `${coins} 🪙`;
+}
+
+// =====================================================
+//  GAMES VIEW
+// =====================================================
+async function loadGames() {
+    const data = await api('GET', '/api/games');
+    if (!data.ok) return;
+
+    const grid     = document.getElementById('games-grid');
+    const empty    = document.getElementById('games-empty-state');
+    const games    = data.games || [];
+
+    if (games.length === 0) {
+        empty.style.display = 'block';
+        grid.style.display  = 'none';
+        document.getElementById('game-search-bar').style.display = 'none';
+        return;
+    }
+
+    empty.style.display = 'none';
+    grid.style.display  = 'grid';
+    document.getElementById('game-search-bar').style.display = 'block';
+    grid.innerHTML = '';
+
+    games.forEach(g => {
+        const canAfford = currentUser?.is_admin || (currentUser?.coins >= g.stake);
+        const card = document.createElement('div');
+        card.className = 'glass game-card';
+        card.setAttribute('data-name', g.name.toLowerCase());
+        card.innerHTML = `
+            <div class="game-art">
+                <div class="game-title-card">${g.name.toUpperCase()}</div>
+            </div>
+            <div class="game-details">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <span class="stat-pill coin">🪙 ${g.stake} Stake</span>
+                    <span class="stat-pill">👥 ${g.min_players}–${g.max_players} Players</span>
+                </div>
+                <button class="game-btn" ${canAfford ? '' : 'disabled'} onclick="openLobbyModal(${JSON.stringify(g).replace(/"/g,'&quot;')})">
+                    ${canAfford ? 'PLAY' : 'NO COINS'}
+                </button>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+// =====================================================
+//  GAME SEARCH FILTER
+// =====================================================
+function filterGames() {
+    const q = document.getElementById('game-search-input').value.toLowerCase();
+    document.querySelectorAll('.game-card').forEach(card => {
+        const name = card.getAttribute('data-name') || '';
+        card.style.display = name.includes(q) ? '' : 'none';
+    });
+}
+
+// =====================================================
+//  LOBBY MODAL
+// =====================================================
+function openLobbyModal(game) {
+    pendingGame = game;
+    hasJoinedLobby = false;
+
+    document.getElementById('lobby-game-name').textContent     = game.name.toUpperCase();
+    document.getElementById('lobby-stake-display').textContent  = game.stake;
+    document.getElementById('lobby-join-cost').textContent      = game.stake;
+    document.getElementById('lobby-pot-display').textContent    = 0;
+    document.getElementById('lobby-players-display').textContent= `0/${game.min_players}`;
+    document.getElementById('lobby-status').textContent         = 'Tap PAY & JOIN to enter the lobby.';
+    document.getElementById('lobby-join-btn').style.display     = 'block';
+    document.getElementById('lobby-leave-btn').style.display    = 'none';
+    document.getElementById('lobby-chat-box').style.display     = 'none';
+
+    renderPlayerSlots([], game.min_players);
+    document.getElementById('lobby-modal').classList.add('open');
+    history.pushState({ view: currentView, modal: 'lobby' }, '', '#lobby');
+}
+
+function closeLobbyModal() {
+    document.getElementById('lobby-modal').classList.remove('open');
+    document.getElementById('lobby-invite-box').style.display = 'none';
+    document.getElementById('invite-results').innerHTML = '';
+    document.getElementById('invite-search-input').value = '';
+    if (lobbyWs) { lobbyWs.close(); lobbyWs = null; }
+}
+
+function renderPlayerSlots(members, needed) {
+    const slots = document.getElementById('lobby-player-slots');
+    slots.innerHTML = '';
+    for (let i = 0; i < needed; i++) {
+        const m    = members[i];
+        const div  = document.createElement('div');
+        div.className = `player-slot ${m ? 'filled' : ''}`;
+        div.innerHTML = m
+            ? `<div>${m.avatar}</div><div class="slot-name">${m.display_name}</div>`
+            : `<div style="color:var(--text-muted);font-size:1.2rem;">?</div><div class="slot-name">Waiting</div>`;
+        slots.appendChild(div);
+    }
+}
+
+async function joinLobby() {
+    if (!pendingGame) return;
+    const btn = document.getElementById('lobby-join-btn');
+    btn.disabled = true;
+    btn.textContent = 'Joining...';
+
+    const data = await api('POST', '/api/lobby/join', { game_id: pendingGame.game_id });
+
+    if (!data.ok) {
+        showToast(data.error, 'error');
+        btn.disabled    = false;
+        btn.innerHTML   = `PAY & JOIN — ${pendingGame.stake} 🪙`;
+        return;
+    }
+
+    // Update coin balance
+    currentUser.coins = data.coins;
+    updateHeaderCoins();
+
+    activeLobbyId  = data.lobby_id;
+    hasJoinedLobby = true;
+
+    document.getElementById('lobby-join-btn').style.display  = 'none';
+    document.getElementById('lobby-leave-btn').style.display = 'block';
+    document.getElementById('lobby-chat-box').style.display  = 'block';
+    document.getElementById('lobby-pot-display').textContent = data.pot;
+    document.getElementById('lobby-players-display').textContent = `${data.members}/${data.min_players}`;
+    document.getElementById('lobby-status').textContent = data.started
+        ? '⚡ Match starting!'
+        : `Waiting for ${data.min_players - data.members} more player(s)...`;
+
+    // Show invite section with lobby code
+    if (data.lobby_code) {
+        document.getElementById('lobby-invite-box').style.display = 'block';
+        document.getElementById('lobby-invite-code').textContent  = data.lobby_code;
+    }
+
+    showToast(`Joined! ${pendingGame.stake} coins staked.`, 'success');
+
+    // Connect WebSocket for live updates
+    connectLobbyWs(data.lobby_id);
+
+    if (data.started) onMatchStart();
+}
+
+async function leaveLobby() {
+    if (!activeLobbyId) return;
+    const data = await api('POST', '/api/lobby/leave', { lobby_id: activeLobbyId });
+    if (!data.ok) { showToast(data.error, 'error'); return; }
+
+    currentUser.coins = data.coins;
+    updateHeaderCoins();
+    hasJoinedLobby = false;
+    activeLobbyId  = null;
+    if (lobbyWs) { lobbyWs.close(); lobbyWs = null; }
+
+    showToast(`Refunded ${data.refunded} coins.`, 'info');
+    closeLobbyModal();
+}
+
+// =====================================================
+//  WEBSOCKET — LOBBY REAL-TIME
+// =====================================================
+function connectLobbyWs(lobbyId) {
+    if (lobbyWs) lobbyWs.close();
+
+    const proto  = location.protocol === 'https:' ? 'wss' : 'ws';
+    const host   = API_BASE ? API_BASE.replace(/^https?:\/\//, '') : location.host;
+    const wsUrl  = `${proto}://${host}/ws?lobby_id=${lobbyId}&token=${sessionToken}`;
+
+    lobbyWs = new WebSocket(wsUrl);
+
+    lobbyWs.onopen = () => {
+        console.log('[WS] Connected to lobby', lobbyId);
+    };
+
+    lobbyWs.onmessage = e => {
+        try {
+            const msg = JSON.parse(e.data);
+            handleLobbyWsMessage(msg);
+        } catch {}
+    };
+
+    lobbyWs.onclose = () => { console.log('[WS] Disconnected'); };
+    lobbyWs.onerror = () => { console.log('[WS] Error'); };
+
+    // Ping every 25s to keep alive
+    const pingInterval = setInterval(() => {
+        if (lobbyWs && lobbyWs.readyState === WebSocket.OPEN) {
+            lobbyWs.send(JSON.stringify({ type: 'ping' }));
+        } else {
+            clearInterval(pingInterval);
+        }
+    }, 25000);
+}
+
+function handleLobbyWsMessage(msg) {
+    if (msg.type === 'history') {
+        const box = document.getElementById('lobby-chat-messages');
+        box.innerHTML = '';
+        msg.messages.forEach(m => appendChatMsg(m));
+        return;
+    }
+    if (msg.type === 'chat') {
+        appendChatMsg(msg);
+        return;
+    }
+    if (msg.type === 'system') {
+        appendSystemMsg(msg.message);
+        return;
+    }
+    if (msg.type === 'player_joined') {
+        document.getElementById('lobby-players-display').textContent = `${msg.count}/${pendingGame?.min_players || msg.needed}`;
+        document.getElementById('lobby-status').textContent = `${msg.count}/${msg.needed} players ready...`;
+        // Refresh lobby data to show member avatars
+        refreshLobbyMembers();
+        return;
+    }
+    if (msg.type === 'player_left') {
+        document.getElementById('lobby-status').textContent = 'A player left. Waiting...';
+        refreshLobbyMembers();
+        return;
+    }
+    if (msg.type === 'match_start') {
+        document.getElementById('lobby-status').textContent = '⚡ Match starting!';
+        setTimeout(onMatchStart, 1000);
+        return;
+    }
+    if (msg.type === 'match_over') {
+        showToast(`🏆 Winner: ${msg.winner} — Pot: ${msg.pot} 🪙`, 'success');
+        closeLobbyModal();
+        loadGames();
+        if (msg.winner === currentUser?.username) {
+            currentUser.coins += msg.pot;
+            updateHeaderCoins();
+        }
+        return;
+    }
+}
+
+async function refreshLobbyMembers() {
+    if (!activeLobbyId) return;
+    const data = await api('GET', `/api/lobby/${activeLobbyId}`);
+    if (data.ok && pendingGame) {
+        renderPlayerSlots(data.members, pendingGame.min_players);
+        document.getElementById('lobby-pot-display').textContent = data.lobby.pot;
+    }
+}
+
+function onMatchStart() {
+    showToast('⚡ Match started! Good luck!', 'success');
+    if (pendingGame && activeLobbyId) {
+        // Open the game file named after game_id e.g. xo.html, tac-grid.html
+        const gameUrl = `/${pendingGame.game_id}.html?lobby=${activeLobbyId}&token=${sessionToken}`;
+        window.open(gameUrl, '_blank');
+    }
+    closeLobbyModal();
+}
+
+// =====================================================
+//  CHAT
+// =====================================================
+function appendChatMsg(msg) {
+    const box = document.getElementById('lobby-chat-messages');
+    const div = document.createElement('div');
+    div.className = 'chat-msg';
+    div.innerHTML = `<span class="msg-user">${msg.avatar} ${msg.user}:</span> <span class="msg-text">${escHtml(msg.message)}</span>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+}
+
+function appendSystemMsg(text) {
+    const box = document.getElementById('lobby-chat-messages');
+    const div = document.createElement('div');
+    div.className = 'chat-msg system-msg';
+    div.textContent = text;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+}
+
+function sendChatMessage() {
+    const input = document.getElementById('lobby-chat-input');
+    const text  = input.value.trim();
+    if (!text || !lobbyWs || lobbyWs.readyState !== WebSocket.OPEN) return;
+    lobbyWs.send(JSON.stringify({ type: 'chat', message: text }));
+    input.value = '';
+}
+
+function sendQuickMsg(index) {
+    if (!lobbyWs || lobbyWs.readyState !== WebSocket.OPEN) return;
+    lobbyWs.send(JSON.stringify({ type: 'quick_msg', index }));
+}
+
+document.getElementById('lobby-chat-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendChatMessage();
+});
+
+function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// =====================================================
+//  WALLET VIEW
+// =====================================================
+async function loadWallet() {
+    if (!currentUser) return;
+    const data = await api('GET', '/api/wallet');
+    if (!data.ok) return;
+
+    currentUser.coins = data.coins;
+    updateHeaderCoins();
+
+    document.getElementById('wallet-avatar').textContent    = currentUser.avatar;
+    document.getElementById('wallet-username').textContent  = currentUser.display_name;
+    document.getElementById('wallet-balance-val').textContent = `${data.coins} 🪙`;
+
+    const txList = document.getElementById('tx-list');
+    if (!data.transactions || data.transactions.length === 0) {
+        txList.innerHTML = '<div class="tx-item"><span style="color:var(--text-muted);font-size:0.85rem;">No transactions yet.</span></div>';
+        return;
+    }
+
+    txList.innerHTML = data.transactions.map(tx => {
+        const isPos  = tx.amount > 0;
+        const date   = new Date(tx.created_at).toLocaleDateString();
+        const label  = txTypeLabel(tx.type);
+        return `
+            <div class="tx-item">
+                <div>
+                    <div class="tx-title">${label}</div>
+                    <div class="tx-date">${tx.description || ''} · ${date}</div>
+                </div>
+                <div class="tx-amount ${isPos ? 'pos' : 'neg'}">${isPos ? '+' : ''}${tx.amount} 🪙</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function txTypeLabel(type) {
+    const map = {
+        signup_bonus:  '🎁 Welcome Bonus',
+        stake_deducted:'🎮 Game Stake',
+        payout:        '🏆 Match Win',
+        admin_credit:  '⬆️ Admin Credit',
+        admin_debit:   '⬇️ Admin Debit',
+        refund:        '↩️ Refund',
+    };
+    return map[type] || type;
+}
+
+// =====================================================
+//  PROFILE VIEW
+// =====================================================
+function loadProfile() {
+    if (!currentUser) return;
+    document.getElementById('profile-display-input').value = currentUser.display_name;
+    // Mark selected avatar
+    document.querySelectorAll('.avatar-item').forEach(el => {
+        el.classList.toggle('selected', el.textContent === currentUser.avatar);
+    });
+    selectedAvatar = currentUser.avatar;
+}
+
+function selectAvatar(el, emoji) {
+    document.querySelectorAll('.avatar-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedAvatar = emoji;
+}
+
+async function saveProfile() {
+    const displayName = document.getElementById('profile-display-input').value.trim();
+    if (!displayName) { showToast('Display name cannot be empty.', 'error'); return; }
+
+    const data = await api('PUT', '/api/profile', { display_name: displayName, avatar: selectedAvatar });
+    if (!data.ok) { showToast(data.error, 'error'); return; }
+
+    currentUser.display_name = data.display_name;
+    currentUser.avatar       = data.avatar;
+    showToast('Profile saved!', 'success');
+}
+
+// =====================================================
+//  ADMIN — USERS
+// =====================================================
+async function loadAdminUsers() {
+    const data = await api('GET', '/api/admin/users');
+    if (!data.ok) return;
+
+    const tbody = document.getElementById('admin-users-tbody');
+    if (!data.users.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No players yet.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = data.users.map(u => `
+        <tr data-username="${u.username.toLowerCase()}">
+            <td style="font-weight:600;">${u.username}</td>
+            <td>${u.display_name}</td>
+            <td id="coins-${u.id}">${u.coins} 🪙</td>
+            <td>${u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never'}</td>
+            <td style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn-sm" onclick="adminAdjustCoins(${u.id},'${u.username}',1)">+ Add</button>
+                <button class="btn-sm danger" onclick="adminAdjustCoins(${u.id},'${u.username}',-1)">− Remove</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function filterAdminUsers() {
+    const filter = document.getElementById('adminUserSearch').value.toLowerCase();
+    document.querySelectorAll('#admin-users-tbody tr').forEach(row => {
+        const name = row.getAttribute('data-username') || '';
+        row.style.display = name.includes(filter) ? '' : 'none';
+    });
+}
+
+async function adminAdjustCoins(userId, username, direction) {
+    const amtStr = prompt(`${direction > 0 ? 'Add' : 'Remove'} coins for ${username}:\nEnter amount:`);
+    if (!amtStr || isNaN(amtStr)) return;
+    const amount = Math.abs(parseInt(amtStr)) * direction;
+    const reason = prompt('Reason (optional):') || '';
+
+    const data = await api('POST', '/api/admin/coins', { user_id: userId, amount, reason });
+    if (!data.ok) { showToast(data.error, 'error'); return; }
+
+    const cell = document.getElementById(`coins-${userId}`);
+    if (cell) cell.textContent = `${data.new_balance} 🪙`;
+    showToast(`${username} now has ${data.new_balance} coins.`, 'success');
+}
+
+// =====================================================
+//  ADMIN — GAMES
+// =====================================================
+async function loadAdminGames() {
+    const data = await api('GET', '/api/admin/games');
+    if (!data.ok) return;
+
+    const tbody = document.getElementById('admin-games-tbody');
+    tbody.innerHTML = data.games.map(g => `
+        <tr>
+            <td style="font-weight:600;">${g.name}</td>
+            <td>
+                <input type="number" class="stake-input" id="stake-${g.game_id}" value="${g.stake}" min="1">
+                <button class="btn-sm" onclick="adminSaveStake('${g.game_id}')">Save</button>
+            </td>
+            <td>${g.min_players}–${g.max_players}</td>
+            <td><span class="badge ${g.is_active ? 'active' : 'inactive'}">${g.is_active ? 'Active' : 'Off'}</span></td>
+            <td>
+                <button class="btn-sm ${g.is_active ? 'danger' : ''}" onclick="adminToggleGame('${g.game_id}', ${g.is_active})">
+                    ${g.is_active ? 'Disable' : 'Enable'}
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function adminSaveStake(gameId) {
+    const stake = parseInt(document.getElementById(`stake-${gameId}`).value);
+    if (!stake || stake < 1) { showToast('Stake must be at least 1.', 'error'); return; }
+    const data = await api('PUT', `/api/admin/games/${gameId}`, { stake });
+    if (!data.ok) { showToast(data.error, 'error'); return; }
+    showToast('Stake updated!', 'success');
+    loadGames();
+}
+
+async function adminToggleGame(gameId, currentlyActive) {
+    const data = await api('PUT', `/api/admin/games/${gameId}`, { is_active: !currentlyActive });
+    if (!data.ok) { showToast(data.error, 'error'); return; }
+    showToast(`Game ${currentlyActive ? 'disabled' : 'enabled'}.`, 'success');
+    loadAdminGames();
+    loadGames();
+}
+
+async function adminRegisterGame() {
+    const game_id     = document.getElementById('newGameId').value.trim();
+    const name        = document.getElementById('newGameTitle').value.trim();
+    const stake       = parseInt(document.getElementById('newGameCost').value) || 3;
+    const min_players = parseInt(document.getElementById('newGameMin').value)  || 2;
+    const max_players = parseInt(document.getElementById('newGameMax').value)  || 2;
+
+    if (!game_id || !name) { showToast('Game ID and Name are required.', 'error'); return; }
+
+    const data = await api('POST', '/api/admin/games', { game_id, name, stake, min_players, max_players, needs_rt: true });
+    if (!data.ok) { showToast(data.error, 'error'); return; }
+
+    showToast(`"${name}" registered!`, 'success');
+    ['newGameId','newGameTitle','newGameCost','newGameMin','newGameMax'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    loadAdminGames();
+    loadGames();
+}
+
+// =====================================================
+//  ADMIN — MATCHES
+// =====================================================
+async function loadAdminMatches() {
+    const data = await api('GET', '/api/admin/matches');
+    if (!data.ok) return;
+
+    const tbody = document.getElementById('admin-matches-tbody');
+    if (!data.matches.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No matches yet.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = data.matches.map(m => `
+        <tr>
+            <td style="font-weight:600;">${m.game_name || m.game_id}</td>
+            <td style="color:var(--accent-coin);">${m.pot} 🪙</td>
+            <td>${m.winner || '—'}</td>
+            <td><span class="badge ${m.status === 'finished' ? 'active' : 'inactive'}">${m.status}</span></td>
+            <td>${new Date(m.created_at).toLocaleDateString()}</td>
+        </tr>
+    `).join('');
+}
+
+// =====================================================
+//  COPY INVITE CODE
+// =====================================================
+function copyInviteCode() {
+    const code = document.getElementById('lobby-invite-code').textContent;
+    if (!code || code === '------') return;
+    navigator.clipboard.writeText(code).then(() => {
+        showToast(`Code ${code} copied! Share with your friend.`, 'success');
+    }).catch(() => {
+        showToast(`Your code: ${code}`, 'info');
+    });
+}
+
+// =====================================================
+//  SEARCH USERS FOR INVITE
+// =====================================================
+let searchTimer;
+async function searchUsersForInvite() {
+    clearTimeout(searchTimer);
+    const q = document.getElementById('invite-search-input').value.trim();
+    const resultsEl = document.getElementById('invite-results');
+    if (q.length < 2) { resultsEl.innerHTML = ''; return; }
+
+    searchTimer = setTimeout(async () => {
+        const data = await api('GET', `/api/users/search?q=${encodeURIComponent(q)}`);
+        if (!data.ok) return;
+        if (data.users.length === 0) {
+            resultsEl.innerHTML = '<div style="font-size:0.8rem;color:var(--text-muted);padding:6px;">No users found.</div>';
+            return;
+        }
+        const code = document.getElementById('lobby-invite-code').textContent;
+        resultsEl.innerHTML = data.users.map(u => `
+            <div class="invite-user-row">
+                <div class="invite-user-info">
+                    <span style="font-size:1.2rem;">${u.avatar}</span>
+                    <div>
+                        <div style="font-weight:700;">${u.display_name}</div>
+                        <div style="font-size:0.75rem;color:var(--text-muted);">@${u.username}</div>
+                    </div>
+                </div>
+                <button class="invite-user-btn" onclick="copyCodeForUser('${u.display_name}','${code}')">Copy Code</button>
+            </div>
+        `).join('');
+    }, 300);
+}
+
+function copyCodeForUser(displayName, code) {
+    navigator.clipboard.writeText(code).then(() => {
+        showToast(`Code ${code} copied for ${displayName}!`, 'success');
+    }).catch(() => {
+        showToast(`Share this code with ${displayName}: ${code}`, 'info');
+    });
+}
+
+// =====================================================
+//  JOIN BY CODE MODAL
+// =====================================================
+function openJoinCodeModal() {
+    document.getElementById('join-code-input').value = '';
+    document.getElementById('join-code-error').textContent = '';
+    document.getElementById('join-code-modal').classList.add('open');
+    history.pushState({ view: currentView, modal: 'join-code' }, '', '#join');
+    setTimeout(() => document.getElementById('join-code-input').focus(), 100);
+}
+
+function closeJoinCodeModal() {
+    document.getElementById('join-code-modal').classList.remove('open');
+    history.back();
+}
+
+async function joinByCode() {
+    const code   = document.getElementById('join-code-input').value.trim().toUpperCase();
+    const errEl  = document.getElementById('join-code-error');
+    errEl.textContent = '';
+
+    if (code.length !== 6) { errEl.textContent = 'Code must be 6 characters.'; return; }
+
+    const btn = document.querySelector('.join-code-btn');
+    btn.disabled = true;
+    btn.textContent = 'Joining...';
+
+    const data = await api('POST', '/api/lobby/join-by-code', { code });
+
+    btn.disabled = false;
+    btn.textContent = 'JOIN GAME';
+
+    if (!data.ok) { errEl.textContent = data.error; return; }
+
+    // Success — close this modal and open lobby modal in joined state
+    closeJoinCodeModal();
+    currentUser.coins = data.coins;
+    updateHeaderCoins();
+
+    activeLobbyId  = data.lobby_id;
+    hasJoinedLobby = true;
+    pendingGame    = { game_id: data.game_id, name: data.game_name, stake: data.stake, min_players: data.min_players };
+
+    // Open lobby modal in joined state
+    document.getElementById('lobby-game-name').textContent      = data.game_name.toUpperCase();
+    document.getElementById('lobby-stake-display').textContent   = data.stake;
+    document.getElementById('lobby-join-cost').textContent       = data.stake;
+    document.getElementById('lobby-pot-display').textContent     = data.pot;
+    document.getElementById('lobby-players-display').textContent = `${data.members}/${data.min_players}`;
+    document.getElementById('lobby-status').textContent          = data.started
+        ? '⚡ Match starting!'
+        : `Waiting for ${data.min_players - data.members} more player(s)...`;
+    document.getElementById('lobby-join-btn').style.display      = 'none';
+    document.getElementById('lobby-leave-btn').style.display     = 'block';
+    document.getElementById('lobby-chat-box').style.display      = 'block';
+    document.getElementById('lobby-invite-box').style.display    = 'none';
+    renderPlayerSlots([], data.min_players);
+    document.getElementById('lobby-modal').classList.add('open');
+    history.pushState({ view: currentView, modal: 'lobby' }, '', '#lobby');
+
+    showToast(`Joined ${data.game_name} lobby!`, 'success');
+    connectLobbyWs(data.lobby_id);
+    if (data.started) onMatchStart();
+}
+
+// Enter key on join code input
+document.getElementById('join-code-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') joinByCode();
+});
+</script>
+</body>
+</html>
