@@ -1,0 +1,12 @@
+{
+  "name": "battle-arena-wallet",
+  "version": "1.0.0",
+  "description": "Battle Arena wallet + game hub backend",
+  "main": "server-3.js",
+  "scripts": {
+    "start": "node server-3.js"
+  },
+  "dependencies": {
+    "mongodb": "^6.0.0"
+  }
+}
